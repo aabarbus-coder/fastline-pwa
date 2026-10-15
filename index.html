@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Fastline</title>
+<meta name="description" content="Intermittent fasting tracker: live timer, what your body does hour by hour, exercise, projections and history.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#14251F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fastline">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Commissioner:wght@500;700;800&family=Fira+Sans:ital,wght@0,400;0,700;1,400&family=Fira+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a live clock band on top, then a vertical "descent" timeline of body milestones beside a side column of profile + summary; projections, history and backup below. */
+:root{
+  --bg:#EEF2EE; --surface:#FFFFFF; --sunk:#E3E9E4; --ink:#16201B; --muted:#56655D; --line:#C9D3CC;
+  --accent:#23675A; --accent-soft:#D3E6E0; --glow:#C76A14; --glow-soft:#F6E2CC;
+  --good:#2F7D46; --warn:#A8670B; --bad:#B23A3A;
+  --band-bg:#14251F; --band-ink:#ECF2EE;
+  --f-display:"Commissioner", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Fira Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"Fira Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r:10px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1512; --surface:#18201C; --sunk:#121915; --ink:#E4ECE7; --muted:#9AABA2; --line:#2C3832;
+  --accent:#6CC2A8; --accent-soft:#1E3A32; --glow:#F2A456; --glow-soft:#3A2A18;
+  --good:#6BC285; --warn:#E3A24A; --bad:#EE7B7B; --band-bg:#1B2C25; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1512; --surface:#18201C; --sunk:#121915; --ink:#E4ECE7; --muted:#9AABA2; --line:#2C3832;
+  --accent:#6CC2A8; --accent-soft:#1E3A32; --glow:#F2A456; --glow-soft:#3A2A18;
+  --good:#6BC285; --warn:#E3A24A; --bad:#EE7B7B; --band-bg:#1B2C25; color-scheme:dark}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+[hidden]{display:none!important}
+img{max-width:100%}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+h2{font-size:1.45rem;font-weight:700}
+h3{font-size:1.06rem;font-weight:700}
+p{margin:0}
+a{color:var(--accent)}
+.mono,.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.label{font-size:.74rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+.muted{color:var(--muted)}
+.small{font-size:.86rem}
+
+header.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.brand{font-family:var(--f-display);font-weight:800;font-size:1.6rem;letter-spacing:-.02em}
+.brand span{color:var(--glow)}
+.topright{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+#saveState{font-size:.82rem;color:var(--muted)}
+.lang{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.lang button{font:inherit;font-weight:700;font-size:.85rem;padding:6px 12px;border:0;background:transparent;color:var(--muted);cursor:pointer}
+.lang button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
+.installbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--glow-soft);border-radius:var(--r);padding:10px 14px;font-size:.9rem}
+
+/* Live band (same deep look in both themes) */
+.band{background:var(--band-bg);color:var(--band-ink);color-scheme:dark;border:1px solid var(--line);border-radius:16px;padding:24px;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:24px}
+.band .label{color:color-mix(in srgb,var(--band-ink) 70%,transparent)}
+.clock{font-family:var(--f-display);font-weight:800;font-size:clamp(3rem,9vw,5.6rem);line-height:.95;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.clock small{font-size:.38em;font-weight:500;letter-spacing:0;opacity:.75;margin-left:.1em}
+.secs{font-family:var(--f-mono);font-size:1rem;opacity:.7}
+.stageNow{margin-top:14px;display:flex;flex-direction:column;gap:4px}
+.stageNow b{font-family:var(--f-display);font-size:1.3rem;color:var(--glow)}
+.goalbar{margin-top:16px;height:10px;border-radius:99px;background:color-mix(in srgb,var(--band-ink) 18%,transparent);overflow:hidden}
+.goalbar i{display:block;height:100%;width:0;background:var(--glow);border-radius:99px;transition:width .6s}
+.goalmeta{display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:.85rem;opacity:.85;font-family:var(--f-mono)}
+.controls{display:flex;flex-direction:column;gap:12px;min-width:0}
+.band input,.band select{background:color-mix(in srgb,var(--band-ink) 10%,transparent);color:var(--band-ink);border:1px solid color-mix(in srgb,var(--band-ink) 30%,transparent)}
+.band select option{color:#16201B;background:#FFFFFF}
+.band .btn{background:var(--glow);color:#1A1208;border-color:var(--glow)}
+.band .btn.ghost{background:transparent;color:var(--band-ink);border-color:color-mix(in srgb,var(--band-ink) 40%,transparent)}
+.note{font-size:.84rem;padding:8px 10px;border-radius:8px;background:color-mix(in srgb,var(--glow) 22%,transparent)}
+
+/* forms */
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:.8rem;font-weight:700;color:inherit;opacity:.85}
+input,select{font:inherit;font-size:1rem;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);width:100%;min-width:0}
+input:focus-visible,select:focus-visible,.btn:focus-visible,button:focus-visible{outline:3px solid var(--glow);outline-offset:2px}
+.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.btn{font:inherit;font-weight:700;padding:10px 16px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--surface);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.err{color:var(--bad);font-size:.86rem;min-height:1.2em}
+.ok{color:var(--good)}
+.band .err{color:#FFB4A8}
+
+/* main grid */
+.main{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:28px;align-items:start}
+.side{display:flex;flex-direction:column;gap:20px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.sechead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+
+/* timeline */
+.tlwrap{position:relative}
+.tlwrap .rail{position:absolute;left:76px;top:8px;bottom:8px;width:4px;border-radius:4px;background:var(--line)}
+.tlwrap .fill{position:absolute;left:76px;top:8px;width:4px;border-radius:4px;background:linear-gradient(var(--accent),var(--glow));height:0;transition:height .8s}
+.tl{position:relative;list-style:none;margin:0;padding:0}
+.ms{position:relative;display:grid;grid-template-columns:62px 32px minmax(0,1fr);gap:0 10px;padding-bottom:22px}
+.ms:last-child{padding-bottom:0}
+.ms .hr{font-family:var(--f-mono);font-weight:500;text-align:right;padding-top:2px;color:var(--muted);font-variant-numeric:tabular-nums}
+.ms .dot{width:18px;height:18px;border-radius:50%;margin:3px 0 0 1px;background:var(--surface);border:3px solid var(--line);position:relative;z-index:1}
+.ms .body{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0;position:relative;z-index:1}
+.ms p{color:var(--muted);font-size:.95rem}
+.ms.reached .dot{background:var(--accent);border-color:var(--accent)}
+.ms.reached .hr{color:var(--accent)}
+.ms.current .dot{background:var(--glow);border-color:var(--glow);box-shadow:0 0 0 6px var(--glow-soft)}
+.ms.current .body{border-color:var(--glow);box-shadow:0 0 0 1px var(--glow)}
+.ms.current .hr{color:var(--glow)}
+.ms.ahead .body{background:var(--bg)}
+.ms.ahead h3{color:var(--muted)}
+.meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:.78rem}
+.chip{display:inline-block;padding:2px 8px;border-radius:99px;font-weight:700;font-size:.74rem;letter-spacing:.02em}
+.ev-strong{background:var(--accent-soft);color:var(--accent)}
+.ev-moderate{background:var(--glow-soft);color:var(--glow)}
+.ev-emerging{background:var(--sunk);color:var(--muted);border:1px dashed var(--line)}
+.state{font-family:var(--f-mono);font-size:.78rem;font-weight:500}
+.ms.reached .state{color:var(--accent)} .ms.current .state{color:var(--glow)} .ms.ahead .state{color:var(--muted)}
+.caution{font-size:.82rem;color:var(--warn);font-weight:700}
+
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.stat{background:var(--sunk);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat .v{font-family:var(--f-display);font-weight:700;font-size:1.5rem;font-variant-numeric:tabular-nums;line-height:1.1}
+.stat .v small{font-size:.6em;font-weight:500;color:var(--muted)}
+.stat .s{font-size:.8rem;color:var(--muted)}
+.bmiscale{position:relative;height:12px;border-radius:99px;display:flex;overflow:hidden}
+.bmiscale span{height:100%}
+.bmimark{position:relative;height:16px}
+.bmimark i{position:absolute;top:0;width:2px;height:16px;background:var(--ink);transform:translateX(-1px)}
+.bmilabels{display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);font-family:var(--f-mono)}
+.badges{display:flex;flex-wrap:wrap;gap:6px}
+.badge{padding:4px 10px;border-radius:99px;background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:.8rem}
+.badge.gold{background:var(--glow-soft);color:var(--glow)}
+
+/* exercise */
+.exbox{border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:10px}
+.exlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.exlist li{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--sunk);border-radius:8px;padding:8px 10px;font-size:.9rem;flex-wrap:wrap}
+.exlist li .what{min-width:0}
+.exlist li .gain{font-family:var(--f-mono);font-size:.8rem;color:var(--accent);white-space:nowrap}
+.exform{display:grid;grid-template-columns:minmax(0,1fr) 92px 92px;gap:8px;align-items:end}
+.exform .btn{grid-column:1/-1;justify-self:start}
+
+/* projection */
+.proj{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+input[type=range]{padding:0;accent-color:var(--glow)}
+.reachlist{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.reachlist li{display:flex;gap:10px;font-size:.92rem}
+.reachlist li b{font-family:var(--f-mono);font-weight:500;min-width:44px;color:var(--accent)}
+.reachlist li.no{color:var(--muted)} .reachlist li.no b{color:var(--muted)}
+.chartbox{overflow-x:auto}
+svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
+
+/* table */
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:.74rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+td.num,th.num{text-align:right}
+.linkbtn{background:none;border:none;color:var(--bad);font:inherit;font-size:.85rem;cursor:pointer;padding:2px 4px}
+.empty{padding:18px;border:1px dashed var(--line);border-radius:var(--r);color:var(--muted);text-align:center}
+
+.sources{font-size:.86rem;color:var(--muted);display:flex;flex-direction:column;gap:4px;margin:0;padding-left:1.2em}
+details summary{cursor:pointer;font-weight:700}
+.filebtn{position:relative;overflow:hidden}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+
+@media (max-width:860px){ .band,.main,.proj{grid-template-columns:minmax(0,1fr)} }
+@media (max-width:420px){
+  .tlwrap .rail,.tlwrap .fill{left:58px}
+  .ms{grid-template-columns:46px 30px minmax(0,1fr);gap:0 6px}
+  .ms .hr{font-size:.85rem}
+  .row{grid-template-columns:minmax(0,1fr)}
+  .exform{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .exform .field:first-child{grid-column:1/-1}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">Fast<span>line</span></div>
+    <div class="topright">
+      <span id="saveState"></span>
+      <div class="lang" role="group" aria-label="Language / Γλώσσα">
+        <button type="button" id="langEn" lang="en">EN</button>
+        <button type="button" id="langEl" lang="el">ΕΛ</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="installbar" id="installBar" hidden>
+    <span id="installText"></span>
+    <button class="btn" type="button" id="installBtn" hidden data-i18n="installBtn"></button>
+  </div>
+
+  <!-- LIVE FAST -->
+  <section class="band" data-i18n-aria="currentFast">
+    <div>
+      <div class="label" id="clockLabel"></div>
+      <div class="clock" id="clock"></div>
+      <div class="secs" id="secs"></div>
+      <div class="stageNow" id="stageNow"></div>
+      <div class="goalbar" aria-hidden="true"><i id="goalFill"></i></div>
+      <div class="goalmeta"><span id="goalLeft"></span><span id="goalPct">0%</span></div>
+    </div>
+    <div class="controls" id="controls"></div>
+  </section>
+
+  <div class="main">
+    <!-- TIMELINE -->
+    <section class="card" aria-labelledby="tlh">
+      <div class="sechead">
+        <h2 id="tlh" data-i18n="tlTitle"></h2>
+        <span class="label" id="tlFor"></span>
+      </div>
+      <p class="muted small" data-i18n="tlIntro"></p>
+      <div class="tlwrap"><span class="rail"></span><span class="fill" id="tlFill"></span><ol class="tl" id="timeline"></ol></div>
+    </section>
+
+    <div class="side">
+      <!-- PROFILE -->
+      <section class="card" aria-labelledby="ph">
+        <div class="sechead"><h2 id="ph" data-i18n="statsTitle"></h2><span class="label" id="profTag"></span></div>
+        <form id="profileForm" class="row" novalidate>
+          <div class="field"><label for="pAge" data-i18n="age"></label><input id="pAge" type="number" min="10" max="110" inputmode="numeric"></div>
+          <div class="field"><label for="pSex" data-i18n="sex"></label>
+            <select id="pSex"><option value="m" data-i18n="male"></option><option value="f" data-i18n="female"></option></select></div>
+          <div class="field"><label for="pH" data-i18n="height"></label><input id="pH" type="number" min="100" max="230" step="0.5" inputmode="decimal"></div>
+          <div class="field"><label for="pW" data-i18n="weight"></label><input id="pW" type="number" min="25" max="350" step="0.1" inputmode="decimal"></div>
+          <div class="field" style="grid-column:1/-1"><label for="pAct" data-i18n="activity"></label>
+            <select id="pAct">
+              <option value="1.2" data-i18n="act1"></option>
+              <option value="1.375" data-i18n="act2"></option>
+              <option value="1.55" data-i18n="act3"></option>
+              <option value="1.725" data-i18n="act4"></option>
+              <option value="1.9" data-i18n="act5"></option>
+            </select></div>
+          <div class="btns" style="grid-column:1/-1"><button class="btn" type="submit" data-i18n="saveStats"></button><span class="err" id="pErr"></span></div>
+        </form>
+        <div id="bmiBox"></div>
+      </section>
+
+      <!-- SUMMARY -->
+      <section class="card" aria-labelledby="sh">
+        <div class="sechead"><h2 id="sh" data-i18n="sumTitle"></h2><span class="label" id="sumTag"></span></div>
+        <div id="summary"></div>
+        <div id="exercise"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- PROJECTION -->
+  <section class="card" aria-labelledby="prh">
+    <div class="sechead"><h2 id="prh" data-i18n="projTitle"></h2><span class="label" data-i18n="projTag"></span></div>
+    <div class="proj">
+      <div class="col">
+        <h3 data-i18n="whatIfTitle"></h3>
+        <div class="field"><label for="whatIf"><span data-i18n="fastLength"></span>: <span class="mono" id="whatIfVal"></span></label>
+          <input id="whatIf" type="range" min="12" max="72" step="1" value="20"></div>
+        <div class="stats" id="whatIfStats"></div>
+        <ul class="reachlist" id="whatIfReach"></ul>
+        <p class="caution" id="whatIfWarn"></p>
+      </div>
+      <div class="col">
+        <h3 data-i18n="routineTitle"></h3>
+        <div class="row">
+          <div class="field"><label for="rDays" data-i18n="rDays"></label><input id="rDays" type="number" min="1" max="7" value="5" inputmode="numeric"></div>
+          <div class="field"><label for="rCut" data-i18n="rCut"></label><input id="rCut" type="number" min="0" max="2000" step="50" value="400" inputmode="numeric"></div>
+        </div>
+        <p class="small muted" id="routineBasis"></p>
+        <div class="chartbox" id="routineChart"></div>
+        <p class="small" id="routineText"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- HISTORY -->
+  <section class="card" aria-labelledby="hh">
+    <div class="sechead"><h2 id="hh" data-i18n="histTitle"></h2><span class="label" id="histTag"></span></div>
+    <div class="stats" id="lifetime" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"></div>
+    <div class="chartbox" id="weightChart"></div>
+    <div class="tablewrap" id="historyTable"></div>
+  </section>
+
+  <!-- BACKUP -->
+  <section class="card" aria-labelledby="bh">
+    <div class="sechead"><h2 id="bh" data-i18n="backupTitle"></h2><span class="label" id="backupTag"></span></div>
+    <p class="small" data-i18n="backupIntro"></p>
+    <div class="btns">
+      <button class="btn" type="button" id="exportBtn" data-i18n="exportBtn"></button>
+      <label class="btn ghost filebtn"><span data-i18n="importBtn"></span><input id="importFile" type="file" accept="application/json,.json"></label>
+    </div>
+    <div id="importConfirm"></div>
+    <div class="err" id="bErr"></div>
+  </section>
+
+  <section class="card" aria-labelledby="safeh">
+    <h2 id="safeh" data-i18n="safeTitle"></h2>
+    <p class="small" data-i18n="safeText"></p>
+    <details>
+      <summary data-i18n="howTitle"></summary>
+      <p class="small muted" style="margin-top:8px" data-i18n="howText"></p>
+    </details>
+    <ol class="sources" lang="en">
+      <li>Anton SD et al. Flipping the metabolic switch. <i>Obesity</i> 2018;26:254–268. <a href="https://doi.org/10.1002/oby.22065" target="_blank" rel="noopener">doi.org/10.1002/oby.22065</a></li>
+      <li>de Cabo R, Mattson MP. Effects of intermittent fasting on health, aging, and disease. <i>NEJM</i> 2019;381:2541–2551. <a href="https://doi.org/10.1056/NEJMra1905136" target="_blank" rel="noopener">doi.org/10.1056/NEJMra1905136</a></li>
+      <li>Rothman DL et al. Quantitation of hepatic glycogenolysis and gluconeogenesis in fasting humans with 13C NMR. <i>Science</i> 1991;254:573–576. <a href="https://doi.org/10.1126/science.1948033" target="_blank" rel="noopener">doi.org/10.1126/science.1948033</a></li>
+      <li>Cahill GF. Fuel metabolism in starvation. <i>Annu Rev Nutr</i> 2006;26:1–22. <a href="https://doi.org/10.1146/annurev.nutr.26.061505.111258" target="_blank" rel="noopener">doi.org/10.1146/annurev.nutr.26.061505.111258</a></li>
+      <li>Ho KY et al. Fasting enhances growth hormone secretion. <i>J Clin Invest</i> 1988;81:968–975. <a href="https://doi.org/10.1172/JCI113450" target="_blank" rel="noopener">doi.org/10.1172/JCI113450</a></li>
+      <li>Cheng CW et al. Prolonged fasting reduces IGF-1/PKA to promote hematopoietic-stem-cell-based regeneration. <i>Cell Stem Cell</i> 2014;14:810–823. <a href="https://doi.org/10.1016/j.stem.2014.04.014" target="_blank" rel="noopener">doi.org/10.1016/j.stem.2014.04.014</a></li>
+      <li>Mifflin MD et al. A new predictive equation for resting energy expenditure. <i>Am J Clin Nutr</i> 1990;51:241–247. <a href="https://doi.org/10.1093/ajcn/51.2.241" target="_blank" rel="noopener">doi.org/10.1093/ajcn/51.2.241</a></li>
+      <li>Hall KD. What is the required energy deficit per unit weight loss? <i>Int J Obes</i> 2008;32:573–576. <a href="https://doi.org/10.1038/sj.ijo.0803720" target="_blank" rel="noopener">doi.org/10.1038/sj.ijo.0803720</a></li>
+      <li>Ainsworth BE et al. 2011 Compendium of Physical Activities. <i>Med Sci Sports Exerc</i> 2011;43:1575–1581. <a href="https://doi.org/10.1249/MSS.0b013e31821ece12" target="_blank" rel="noopener">doi.org/10.1249/MSS.0b013e31821ece12</a></li>
+      <li>Vieira AF et al. Effects of aerobic exercise performed in fasted v. fed state on fat and carbohydrate metabolism in adults. <i>Br J Nutr</i> 2016;116:1153–1164. <a href="https://doi.org/10.1017/S0007114516003160" target="_blank" rel="noopener">doi.org/10.1017/S0007114516003160</a></li>
+      <li>Romijn JA et al. Regulation of endogenous fat and carbohydrate metabolism in relation to exercise intensity and duration. <i>Am J Physiol</i> 1993;265:E380–E391. <a href="https://doi.org/10.1152/ajpendo.1993.265.3.E380" target="_blank" rel="noopener">doi.org/10.1152/ajpendo.1993.265.3.E380</a></li>
+      <li>World Health Organization. Body mass index classification for adults.</li>
+    </ol>
+  </section>
+</div>
+
+<script src="i18n.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
